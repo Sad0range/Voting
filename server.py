@@ -75,10 +75,10 @@ def registration(data):
     key = data[10:]
     CLIENTS.append([login, uniq, key])
 
-    return "Registration complete"
+    return "Registration done:\n" + str(uniq)
 
 def authorization(login, password):
     return int(login) + int(password)
 
 if __name__ == "__main__":
-    sys.exit(chat_server())         
+    sys.exit(server())         
