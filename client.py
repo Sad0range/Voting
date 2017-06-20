@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# chat_client.py
-
 from Crypto.Cipher import PKCS1_OAEP, AES
 from Crypto.PublicKey import RSA
 from Crypto.Hash import SHA
@@ -188,5 +185,3 @@ def voter():
 if __name__ == "__main__":
 
     sys.exit(voter())
-=======
->>>>>>> 3c4b43d7ca7364988a317e7fcdc7382e105cddf8
