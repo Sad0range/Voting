@@ -2,14 +2,17 @@ from Crypto.Cipher import AES
 from Crypto import Random
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
+from Crypto.Hash import SHA
 import sys
 import socket
+from datetime import datetime, timedelta
 from select import select
  
 SOCKET_LIST = []
 SOCKET_SESSION = []
 CLIENTS = []
 RECV_BUFFER = 4096 
+END_TIME = datetime.now() + timedelta(minutes = 20)
 
 def setup():
     # server setup
@@ -45,8 +48,8 @@ def server():
                 print "Client (%s, %s) connected" % addr
                 sockfd.send(publickey.exportKey())
              
+            # process data recieved from client, 
             else:
-                # process data recieved from client, 
                 try:
                     data = sock.recv(RECV_BUFFER)
                     if data:
@@ -54,25 +57,37 @@ def server():
                         for session_asc in SOCKET_SESSION:
                             if sock == session_asc[0]:
                                 check_session_key = 1
-                                plaintext = decrypt_session(session_asc[1], data)
-                                msg = registration(plaintext)
-                                msg = encrypt_session(session_asc[1], msg)
-                                sock.send(msg)
+                                sessionkey = session_asc[1]
+                                proceed_data(sock, sessionkey, data)
+                                break
                         if check_session_key == 0:
-                            get_session_key(sock, privatekey, data)
+                            sessionkey = decrypt_rsa(sock, privatekey, data)
+                            SOCKET_SESSION.append([sock, sessionkey])
                     else:  
                         if sock in SOCKET_LIST:
                             SOCKET_LIST.remove(sock)
+                            remove_session(sock)
 
                 except:
                     continue
 
     server_socket.close()
  
-def get_session_key(sock, privatekey, data):
+def proceed_data(sock, sessionkey, ciphertext):
+    plaintext = decrypt_session(sessionkey, ciphertext)
+    words = plaintext.split(" ") 
+    action = words[0]
+    if action == "Reg":
+        msg = registration(words)
+    elif action == "Login":
+        msg = authorization(words)
+    msg = encrypt_session(sessionkey, msg)
+    sock.send(msg)
+
+def decrypt_rsa(sock, privatekey, ciphertext):
     cipherrsa = PKCS1_OAEP.new(privatekey)
-    sessionkey = cipherrsa.decrypt(data)
-    SOCKET_SESSION.append([sock, sessionkey])
+    plaintext = cipherrsa.decrypt(ciphertext)
+    return plaintext
 
 def decrypt_session(sessionkey, ciphertext):
     iv = ciphertext[:16]
@@ -82,26 +97,50 @@ def decrypt_session(sessionkey, ciphertext):
     return plaintext
 
 def encrypt_session(sessionkey, plaintext):
-    iv = Random.new().read(16) # 128 bit
+    iv = Random.new().read(16)
     obj = AES.new(sessionkey, AES.MODE_CFB, iv)
     ciphertext = iv + obj.encrypt(plaintext)
     return ciphertext
 
 def registration(data):
-    login = data[:4]
+    if datetime.now() > END_TIME:
+        return "reg_closed"
+
+    login = data[1]
+    password = data[2]
 
     for client_data in CLIENTS:
         if login == client_data[0]:
-            return "Login already exists"
+            return "invalid_log"
 
-    password = data[4:10]
-    uniq = authorization(login, password)
-    CLIENTS.append([login, uniq])
+    uniq = get_key(login, password)
+    vote_perm = 1
+    lst = []
+    CLIENTS.append([login, uniq, vote_perm, lst])
 
-    return "Registration done:\n" + str(uniq)
+    return str(uniq)
 
-def authorization(login, password):
-    return "lox-" + str(login)[:2] + str(password)[2:]
+def authorization(data):
+    login = data[1]
+    password = data[2]
+
+    for client_data in CLIENTS:
+        if login == client_data[0]:
+            key = get_key(login, password)
+            if key == client_data[1]:
+                return str(key)
+    return "invalid_log"
+
+def get_key(login, password):
+    return SHA.new(login + password).digest()
+
+def remove_session(sock):
+    dest = []
+    for session in SOCKET_SESSION:
+        if session[0] == sock:
+            dest = session
+            break
+    SOCKET_SESSION.remove(dest)
 
 if __name__ == "__main__":
     sys.exit(server())         
