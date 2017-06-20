@@ -11,7 +11,7 @@ def parse():
     for line in text:
         cands += str(line.strip()) + " "
 
-    return cands, len(text)
+    return "bul " + cands, len(text)
 
 SOCKET_LIST = []
 SOCKET_SESSION = []
@@ -19,8 +19,8 @@ VOTE = []
 CLIENTS = []
 RECV_BUFFER = 4096 
 CANDIDATES, NUM_OF_CANDIDATES = parse()
-END_REG_TIME = datetime.now() + timedelta(seconds = 30)
-END_VOTE_TIME = END_REG_TIME + timedelta(seconds = 30)
+END_REG_TIME = datetime.now() + timedelta(seconds = 5)
+END_VOTE_TIME = END_REG_TIME + timedelta(seconds = 2)
 
 def setup():
     # server setup
@@ -77,10 +77,15 @@ def server():
                 except:
                     continue
 
-        if voting_flag == 1
+        if voting_flag == 1:
             if datetime.now() >= END_VOTE_TIME:
                 voting_flag = 0
-                voting()
+                msg = voting()
+                for session in SOCKET_SESSION:
+                    tmp = msg
+                    tmp = encrypt_session(session[1], tmp)
+                    session[0].send(tmp)
+                print "Voting over"
             elif datetime.now() >= END_REG_TIME:
                 send_bulletin()
 
@@ -135,7 +140,8 @@ def authorization(data, sock):
                     else:
                        client_data[1] = 0
                     client_data[-1] = sock
-                    return str(key)
+                    msg = str(key)
+                    return msg
 
     return "invalid_log"
 
@@ -155,7 +161,7 @@ def vote(data):
     return "invalid"
 
 def voting():
-    c_list = CANDIDATES.strip().split(" ") 
+    c_list = CANDIDATES.strip().split(" ")[1:]
     msg = "res "
     result = [0] * NUM_OF_CANDIDATES
     for vote_data in VOTE:
@@ -164,15 +170,12 @@ def voting():
             if grade != "*":
                 result[i] += int(grade)
     for i in range(NUM_OF_CANDIDATES):
-        msg += str(c_list[i*3 : i*3 + 3]) + str(result[i]) + " "
+        msg += c_list[i*3] + " " + c_list[i*3+1] + " " + c_list[i*3+2] + " " + str(result[i]) + " "
     msg += "voters "
     for i in CLIENTS:
-        msg += i + " "
+        msg += i[0] + " "
 
-    for session in SOCKET_SESSION:
-        tmp = msg
-        tmp = encrypt_session(session[1], tmp)
-        session[0].send(tmp)
+    return msg
         
 def remove_session(sock):
     SOCKET_LIST.remove(sock)
@@ -201,8 +204,6 @@ def send_bulletin():
             msg = encrypt_session(sessionkey, CANDIDATES)
             sock.send(msg)
             print "Bulletin send to " + client_data[0]
-        else:
-            client_data[-1].send("already")
 
 if __name__ == "__main__":
     sys.exit(server())         
